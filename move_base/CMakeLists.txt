@@ -46,7 +46,7 @@ include_directories(
     ${EIGEN3_INCLUDE_DIRS}
 )
 
-# move_base
+# move_base 库文件为move_base.cpp
 add_library(move_base
   src/move_base.cpp
 )
@@ -56,6 +56,7 @@ target_link_libraries(move_base
     )
 add_dependencies(move_base ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+#源文件为move_base_node.cpp
 add_executable(move_base_node
   src/move_base_node.cpp
 )
