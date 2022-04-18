@@ -59,16 +59,20 @@
 #include <dynamic_reconfigure/server.h>
 #include "move_base/MoveBaseConfig.h"
 
+// 命名空间为move_base
 namespace move_base {
   //typedefs to help us out with the action server so that we don't hace to type so much
+// 声明server端，消息类型是move_base_msgs::MoveBaseAction
   typedef actionlib::SimpleActionServer<move_base_msgs::MoveBaseAction> MoveBaseActionServer;
 
+// 枚举movebase状态表示
   enum MoveBaseState {
-    PLANNING,
-    CONTROLLING,
-    CLEARING
+    PLANNING, //在规划路径中
+    CONTROLLING,//在控制机器人运动中
+    CLEARING //规划或者控制失败在恢复或者清除中
   };
 
+// 枚举，触发恢复模式
   enum RecoveryTrigger
   {
     PLANNING_R,
@@ -80,6 +84,7 @@ namespace move_base {
    * @class MoveBase
    * @brief A class that uses the actionlib::ActionServer interface that moves the robot base to a goal location.
    */
+  // MoveBase类，使用actionlib::ActionServer接口，该接口将robot移动到目标位置
   class MoveBase {
     public:
       /**
@@ -100,6 +105,7 @@ namespace move_base {
        * @param global_plan A reference to the global plan being used
        * @return True if processing of the goal is done, false otherwise
        */
+      // 控制闭环、全局规划
       bool executeCycle(geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& global_plan);
 
     private:
@@ -117,6 +123,7 @@ namespace move_base {
        * @param  resp The plan request
        * @return True if planning succeeded, false otherwise
        */
+      // 当action不活跃时，调用此函数，返回plan
       bool planService(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &resp);
 
       /**
@@ -125,6 +132,7 @@ namespace move_base {
        * @param  plan Will be filled in with the plan made by the planner
        * @return  True if planning succeeds, false otherwise
        */
+      // 新的全局规划，goal 规划的目标点，plan 规划
       bool makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan);
 
       /**
@@ -154,6 +162,7 @@ namespace move_base {
       /**
        * @brief  Reset the state of the move_base action and send a zero velocity command to the base
        */
+      // 重置move_base action的状态，设置速度为0
       void resetState();
 
       void goalCB(const geometry_msgs::PoseStamped::ConstPtr& goal);
@@ -173,19 +182,20 @@ namespace move_base {
       /**
        * @brief This is used to wake the planner at periodic intervals.
        */
+      // 周期性的唤醒规划器
       void wakePlanner(const ros::TimerEvent& event);
 
       tf2_ros::Buffer& tf_;
 
-      MoveBaseActionServer* as_;
+      MoveBaseActionServer* as_;   // actionlib的server端
 
-      boost::shared_ptr<nav_core::BaseLocalPlanner> tc_;
-      costmap_2d::Costmap2DROS* planner_costmap_ros_, *controller_costmap_ros_;
+      boost::shared_ptr<nav_core::BaseLocalPlanner> tc_; // 局部规划器，加载并创建实例后的指针
+      costmap_2d::Costmap2DROS* planner_costmap_ros_, *controller_costmap_ros_;  //costmap的实例化指针
 
-      boost::shared_ptr<nav_core::BaseGlobalPlanner> planner_;
+      boost::shared_ptr<nav_core::BaseGlobalPlanner> planner_;  //全局规划器，加载并创建实例后的指针
       std::string robot_base_frame_, global_frame_;
 
-      std::vector<boost::shared_ptr<nav_core::RecoveryBehavior> > recovery_behaviors_;
+      std::vector<boost::shared_ptr<nav_core::RecoveryBehavior> > recovery_behaviors_;   //出错之后的恢复
       std::vector<std::string> recovery_behavior_names_;
       unsigned int recovery_index_;
 
@@ -207,23 +217,26 @@ namespace move_base {
 
       ros::Time last_valid_plan_, last_valid_control_, last_oscillation_reset_;
       geometry_msgs::PoseStamped oscillation_pose_;
+//以插件形式实现全局规划器、局部规划器和丢失时恢复规划器。
+//插件形式可以实现随时动态地加载C++类库，但需要在包中注册该插件，不用这个的话需要提前链接（相当于运行时加载）
       pluginlib::ClassLoader<nav_core::BaseGlobalPlanner> bgp_loader_;
       pluginlib::ClassLoader<nav_core::BaseLocalPlanner> blp_loader_;
       pluginlib::ClassLoader<nav_core::RecoveryBehavior> recovery_loader_;
 
       //set up plan triple buffer
-      std::vector<geometry_msgs::PoseStamped>* planner_plan_;
-      std::vector<geometry_msgs::PoseStamped>* latest_plan_;
+      // 触发哪种规划器
+      std::vector<geometry_msgs::PoseStamped>* planner_plan_;   //保存最新规划的路径，传给latest_plan_
+      std::vector<geometry_msgs::PoseStamped>* latest_plan_;   //在executeCycle中传给controller_plan_
       std::vector<geometry_msgs::PoseStamped>* controller_plan_;
 
       //set up the planner's thread
+      // 规划器线程
       bool runPlanner_;
       boost::recursive_mutex planner_mutex_;
       boost::condition_variable_any planner_cond_;
       geometry_msgs::PoseStamped planner_goal_;
       boost::thread* planner_thread_;
-
-
+//boost的一种结合了互斥锁的用法，可以使一个线程进入睡眠状态，然后在另一个线程触发唤醒。
       boost::recursive_mutex configuration_mutex_;
       dynamic_reconfigure::Server<move_base::MoveBaseConfig> *dsrv_;
       

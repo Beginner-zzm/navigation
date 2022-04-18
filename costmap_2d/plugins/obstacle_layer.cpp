@@ -609,6 +609,7 @@ void ObstacleLayer::updateRaytraceBounds(double ox, double oy, double wx, double
   touch(ex, ey, min_x, min_y, max_x, max_y);
 }
 
+// 对于障碍物层，在reset函数中，会先取消订阅传感器话题，然后复位地图，然后在重新订阅传感器话题，从而保证整个层从新开始
 void ObstacleLayer::reset()
 {
     deactivate();

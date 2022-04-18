@@ -255,6 +255,8 @@ void StaticLayer::deactivate()
     map_update_sub_.shutdown();
 }
 
+// 对于静态层，在reset函数中，会调用onInitialize函数重新进行初始化，但基本不进行特别的操作
+// 只是将地图更新标志位设为true，从而引起边界的更新（最大地图边界），从而导致后面更新地图时更新整个地图
 void StaticLayer::reset()
 {
   if (first_map_only_)

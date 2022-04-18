@@ -96,12 +96,16 @@ void GlobalPlanner::initialize(std::string name, costmap_2d::Costmap2DROS* costm
 void GlobalPlanner::initialize(std::string name, costmap_2d::Costmap2D* costmap, std::string frame_id) {
     if (!initialized_) {
         ros::NodeHandle private_nh("~/" + name);
+        // 保存costmap对象的指针和frameid
         costmap_ = costmap;
         frame_id_ = frame_id;
-
+// 获取costmap的CellsX, CellsY即地图的长和宽
         unsigned int cx = costmap->getSizeInCellsX(), cy = costmap->getSizeInCellsY();
-
-        private_nh.param("old_navfn_behavior", old_navfn_behavior_, false);
+// 根据old_navfn_behavior的值设定convert_offset_
+// 如果old_navfn_behavior为true，convert_offset_ = 0.0
+// 如果old_navfn_behavior为false，convert_offset_ = 0.5
+// 我们这里设置为false，所以convert_offset_的值为0.5
+        private_nh.param("old_navfn_behavior", old_navfn_behavior_, false);//如果获取不到old_navfn_behavior的值则设置默认值为flase
         if(!old_navfn_behavior_)
             convert_offset_ = 0.5;
         else
