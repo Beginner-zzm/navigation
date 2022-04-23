@@ -54,6 +54,7 @@ PLUGINLIB_EXPORT_CLASS(dwa_local_planner::DWAPlannerROS, nav_core::BaseLocalPlan
 
 namespace dwa_local_planner {
 
+  // 初始化的时候会调用一次
   void DWAPlannerROS::reconfigureCB(DWAPlannerConfig &config, uint32_t level) {
       if (setup_ && config.restore_defaults) {
         config = default_config_;
@@ -94,6 +95,7 @@ namespace dwa_local_planner {
 
   }
 
+// 初始化的时候会调用一次
   void DWAPlannerROS::initialize(
       std::string name,
       tf2_ros::Buffer* tf,
