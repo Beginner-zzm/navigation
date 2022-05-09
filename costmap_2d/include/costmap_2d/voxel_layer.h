@@ -107,12 +107,13 @@ private:
   {
     if (wx < origin_x_ || wy < origin_y_ || wz < origin_z_)
       return false;
+
     mx = ((wx - origin_x_) / resolution_);
     my = ((wy - origin_y_) / resolution_);
     mz = ((wz - origin_z_) / z_resolution_);
     if (mx < size_x_ && my < size_y_ && mz < size_z_)
       return true;
-
+      
     return false;
   }
 

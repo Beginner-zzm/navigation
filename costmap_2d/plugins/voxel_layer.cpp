@@ -270,15 +270,15 @@ void VoxelLayer::clearNonLethal(double wx, double wy, double w_size_x, double w_
 void VoxelLayer::raytraceFreespace(const Observation& clearing_observation, double* min_x, double* min_y,
                                            double* max_x, double* max_y)
 {
+  //Step 1:输入clearing_observation
   size_t clearing_observation_cloud_size = clearing_observation.cloud_->height * clearing_observation.cloud_->width;
   if (clearing_observation_cloud_size == 0)
     return;
-
+  //Step 2:获取传感器原点的地图坐标
   double sensor_x, sensor_y, sensor_z;
   double ox = clearing_observation.origin_.x;
   double oy = clearing_observation.origin_.y;
   double oz = clearing_observation.origin_.z;
-
   if (!worldToMap3DFloat(ox, oy, oz, sensor_x, sensor_y, sensor_z))
   {
     ROS_WARN_THROTTLE(
@@ -380,7 +380,7 @@ void VoxelLayer::raytraceFreespace(const Observation& clearing_observation, doub
       }
     }
   }
-
+  //Step 6:确认清除完毕
   if (publish_clearing_points)
   {
     clearing_endpoints_.header.frame_id = global_frame_;

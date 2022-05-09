@@ -141,7 +141,6 @@ namespace costmap_2d
         std::string pname = static_cast<std::string>(my_list[i]["name"]);
         std::string type = static_cast<std::string>(my_list[i]["type"]);
         ROS_INFO("%s: Using plugin \"%s\"", name_.c_str(), pname.c_str());
-
         copyParentParameters(pname, type, private_nh);
         //这行会创建一个以type为类类型的实例变量，然后让plugin这个指针指向这个实例
         boost::shared_ptr<Layer> plugin = plugin_loader_.createInstance(type);

@@ -58,13 +58,15 @@ StaticLayer::~StaticLayer()
   if (dsrv_)
     delete dsrv_;
 }
-
+// Costmap2DROS的构造函数会调用各Layer中的initialize函数，而initialize函数会调用onInitialize函数，真正的初始化工作在这里完成。
 void StaticLayer::onInitialize()
 {
   ros::NodeHandle nh("~/" + name_), g_nh;
   current_ = true;
 
   global_frame_ = layered_costmap_->getGlobalFrameID();
+
+// 从参数服务器加载订阅静态地图的话题名称；默认静态地图只接收一次，不进行更新；以及默认追踪未知区域（主地图默认关闭）
 
   std::string map_topic;
   nh.param("map_topic", map_topic, std::string("map"));
@@ -82,7 +84,10 @@ void StaticLayer::onInitialize()
   lethal_threshold_ = std::max(std::min(temp_lethal_threshold, 100), 0);
   unknown_cost_value_ = temp_unknown_cost_value;
 
-  // Only resubscribe if topic has changed
+//订阅map_topic，回调函数：incomingMap，map_received_和has_updated_data_标志位设置为false（一旦收到地图，进入回调函数，它们会被置为真）
+// 没有接收到地图时，阻塞。
+
+  // Only resubscribe if topic has changed  //只有当话题改变后才重新订阅
   if (map_sub_.getTopic() != ros::names::resolve(map_topic))
   {
     // we'll subscribe to the latched topic that the map server uses
@@ -91,6 +96,7 @@ void StaticLayer::onInitialize()
     map_received_ = false;
     has_updated_data_ = false;
 
+    //如果map_received_一直是false，则一直阻塞在这里，只有在接收到后进入回调函数更新为true后才会继续进行
     ros::Rate r(10);
     while (!map_received_ && g_nh.ok())
     {
@@ -147,28 +153,39 @@ void StaticLayer::matchSize()
   }
 }
 
+// 接收到的地图上：unknown_cost_value（默认为-1）为未知区域，lethal_cost_threshold（默认100）以上为致命障碍物
+// 当接收到的地图上为-1时，若追踪未知区域，则本层地图上赋值NO_INFORMATION（255）；否则，在本层地图上赋值FREE_SPACE（0）；
+// 当接收到的地图上>=100时，在本层地图上赋值LETHAL_OBSTACLE（254）；
+// 若以上都不是，则按比例返回代价值。
 unsigned char StaticLayer::interpretValue(unsigned char value)
 {
+    //如果追踪未知区域，且传入的参数代表未知，设置为NO_INFORMATION
   // check if the static value is above the unknown or lethal thresholds
   if (track_unknown_space_ && value == unknown_cost_value_)
     return NO_INFORMATION;
+    //如果不追踪未知区域，且传入的参数代表未知，设置为FREE_SPACE
   else if (!track_unknown_space_ && value == unknown_cost_value_)
     return FREE_SPACE;
   else if (value >= lethal_threshold_)
     return LETHAL_OBSTACLE;
+  //如果都不是，设置FREE_SPACE
   else if (trinary_costmap_)
     return FREE_SPACE;
 
+  //如果以上都不是，返回对应比例的障碍值
   double scale = (double) value / lethal_threshold_;
   return scale * LETHAL_OBSTACLE;
 }
 
 void StaticLayer::incomingMap(const nav_msgs::OccupancyGridConstPtr& new_map)
 {
+  // 获取接收到的静态地图的尺寸，当地图不随机器人移动时，若接收到的静态地图和主地图的尺寸/分辨率/起点不同
+  // 则以接收到的地图为准，调整主地图的参数。
   unsigned int size_x = new_map->info.width, size_y = new_map->info.height;
 
   ROS_DEBUG("Received a %d X %d map at %f m/pix", size_x, size_y, new_map->info.resolution);
 
+//如果master map的尺寸、分辨率或原点与获取到的地图不匹配，重新设置master map
   // resize costmap if size, resolution or origin do not match
   Costmap2D* master = layered_costmap_->getCostmap();
   if (!layered_costmap_->isRolling() &&
@@ -183,7 +200,7 @@ void StaticLayer::incomingMap(const nav_msgs::OccupancyGridConstPtr& new_map)
     layered_costmap_->resizeMap(size_x, size_y, new_map->info.resolution, new_map->info.origin.position.x,
                                 new_map->info.origin.position.y,
                                 true /* set size_locked to true, prevents reconfigureCb from overriding map size*/);
-  }
+  }//若本层的数据和接收到的静态地图的参数不同时，继续以接收到的地图为准，调整本层参数。
   else if (size_x_ != size_x || size_y_ != size_y ||
            resolution_ != new_map->info.resolution ||
            origin_x_ != new_map->info.origin.position.x ||
@@ -196,7 +213,7 @@ void StaticLayer::incomingMap(const nav_msgs::OccupancyGridConstPtr& new_map)
   }
 
   unsigned int index = 0;
-
+//用订阅到的map数据来初始化本层static map的数据成员costmap
   // initialize the costmap with static data
   for (unsigned int i = 0; i < size_y; ++i)
   {
@@ -206,8 +223,8 @@ void StaticLayer::incomingMap(const nav_msgs::OccupancyGridConstPtr& new_map)
       costmap_[index] = interpretValue(value);
       ++index;
     }
-  }
-  map_frame_ = new_map->header.frame_id;
+  } 
+  map_frame_ = new_map->header.frame_id;  //获取坐标系名称
 
   // we have a new map, update full size of map
   x_ = y_ = 0;
@@ -268,18 +285,23 @@ void StaticLayer::reset()
     onInitialize();
   }
 }
-
+//更新静态地图边界
+// 若非rolling地图，在有地图数据更新时更新边界，否则，根据静态层更新的区域的边界更新传入的边界。
 void StaticLayer::updateBounds(double robot_x, double robot_y, double robot_yaw, double* min_x, double* min_y,
                                double* max_x, double* max_y)
 {
-
+    //若地图不是窗口滚动的
   if( !layered_costmap_->isRolling() ){
     if (!map_received_ || !(has_updated_data_ || has_extra_bounds_))
+    //has_extra_bounds_初始值为false，而在第一次结束前，has_updated_data_被设置为false
+    //且订阅话题在第一次接收到消息后关闭，故对于static layer，updateBounds只进行一次
+    //Bounds的范围是整张地图的大小，在updateBounds过程中没有对静态地图层做任何的更新
       return;
   }
-
+//若有extrabounds，使用之
   useExtraBounds(min_x, min_y, max_x, max_y);
 
+// 将map系中的起点（x_， y_）与终点（x_ + width_,， y_ + height_）转换到世界系，确保传入的bound能包含整个map在世界系中的范围。
   double wx, wy;
 
   mapToWorld(x_, y_, wx, wy);
@@ -291,8 +313,12 @@ void StaticLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
   *max_y = std::max(wy, *max_y);
 
   has_updated_data_ = false;
-}
+}//由于默认不更新静态地图层，该层的bound将只更新一次。
 
+// 更新静态地图代价 
+// 这里将更新后的bound传入。
+// 若不是rolling地图，那么直接将静态地图层bound范围内的内容合并到主地图，因为二者的尺寸也一样
+// updateWithTrueOverwrite和updateWithMax采用不同的合并策略
 void StaticLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
 {
   if (!map_received_)
@@ -303,18 +329,21 @@ void StaticLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int
 
   if (!layered_costmap_->isRolling())
   {
+    //这里如果不是rolling选项，则直接将本层数据赋值到master map，因为他们尺寸也一样
     // if not rolling, the layered costmap (master_grid) has same coordinates as this layer
     if (!use_maximum_)
       updateWithTrueOverwrite(master_grid, min_i, min_j, max_i, max_j);
     else
       updateWithMax(master_grid, min_i, min_j, max_i, max_j);
   }
-  else
+  else //若为rolling地图，则找到静态地图和global系之间的坐标转换，通过主地图→global→静态地图的转换过程，找到主地图的cell在静态地图上对应的cost，赋值给主地图。
   {
+    //如果是rolling选项，master map就和该层数据坐标不一样
     // If rolling window, the master_grid is unlikely to have same coordinates as this layer
     unsigned int mx, my;
     double wx, wy;
     // Might even be in a different frame
+    //首先获得map坐标系相对于global坐标系的位置，这个时候map坐标系随着机器人的运动而运动
     geometry_msgs::TransformStamped transform;
     try
     {
@@ -333,11 +362,13 @@ void StaticLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int
       for (unsigned int j = min_j; j < max_j; ++j)
       {
         // Convert master_grid coordinates (i,j) into global_frame_(wx,wy) coordinates
+        //master map坐标(i,j)→global坐标(wx,wy)
         layered_costmap_->getCostmap()->mapToWorld(i, j, wx, wy);
         // Transform from global_frame_ to map_frame_
         tf2::Vector3 p(wx, wy, 0);
         p = tf2_transform*p;
         // Set master_grid with cell from map
+        //global坐标p→静态地图坐标(mx, my)
         if (worldToMap(p.x(), p.y(), mx, my))
         {
           if (!use_maximum_)
